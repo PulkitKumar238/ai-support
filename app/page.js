@@ -1,113 +1,270 @@
-import Image from "next/image";
+"use client";
+import {
+  Box,
+  Stack,
+  TextField,
+  Button,
+  Typography,
+  Switch,
+  IconButton,
+} from "@mui/material";
+import { useState } from "react";
+import { styled } from "@mui/system";
+import SendIcon from "@mui/icons-material/Send";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { lightBlue, deepPurple } from "@mui/material/colors";
+import PersonIcon from "@mui/icons-material/Person";
+import ChatIcon from "@mui/icons-material/Chat";
+
+// Custom styles for avatars and message bubbles
+const MessageBubble = styled(Box)(({ theme, role }) => ({
+  display: "inline-block",
+  padding: "10px 15px",
+  borderRadius: "16px",
+  margin: "5px 0",
+  color: "white",
+  backgroundColor:
+    role === "assistant"
+      ? theme.palette.primary.main
+      : theme.palette.secondary.main,
+}));
+
+const Avatar = styled(Box)(({ theme, role }) => ({
+  width: "32px",
+  height: "32px",
+  borderRadius: "50%",
+  backgroundColor:
+    role === "assistant"
+      ? theme.palette.primary.main
+      : theme.palette.secondary.main,
+  color: "white",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: "10px",
+}));
+
+// Light and dark theme options
+const lightTheme = createTheme({
+  palette: {
+    mode: "light",
+    primary: lightBlue,
+    secondary: deepPurple,
+  },
+});
+
+const darkTheme = createTheme({
+  palette: {
+    mode: "dark",
+    primary: lightBlue,
+    secondary: deepPurple,
+  },
+});
 
 export default function Home() {
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      content:
+        "Hello, I am the Headstarter AI Assistant. How can I help you today?",
+      timestamp: new Date(),
+    },
+  ]);
+  const [message, setMessage] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Handle sending messages to the server
+  const sendMessage = async () => {
+    if (message.trim() === "") return; // Prevent sending empty messages
+
+    // Update messages locally
+    const newMessages = [
+      ...messages,
+      { role: "user", content: message, timestamp: new Date() },
+    ];
+    setMessages(newMessages);
+    setMessage("");
+    setIsTyping(true);
+
+    try {
+      // Send the message to the server
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newMessages), // Send the entire conversation
+      });
+
+      if (!response.ok) throw new Error(response.statusText);
+
+      // Read streamed response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let assistantMessage = "";
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          assistantMessage += decoder.decode(value, { stream: true });
+        }
+      }
+
+      // Append the assistant's response to messages
+      const parsedMessages = JSON.parse(assistantMessage.trim());
+      const assistantContent = parsedMessages.choices[0].message.content;
+
+      setMessages([
+        ...newMessages,
+        {
+          role: "assistant",
+          content: assistantContent,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      console.error("Error fetching assistant response:", error);
+      setMessages([
+        ...newMessages,
+        {
+          role: "assistant",
+          content: "An error occurred. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Handle key press in the input field
+  const handleKeyPress = (event) => {
+    if (event.key === "Enter") {
+      sendMessage();
+    }
+  };
+
+  // Toggle between light and dark mode
+  const handleThemeToggle = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+    <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
+      <Box
+        width="100vw"
+        height="100vh"
+        display="flex"
+        flexDirection="column"
+        justifyContent="center"
+        alignItems="center"
+        bgcolor="background.default"
+        color="text.primary"
+      >
+        <Stack
+          direction="column"
+          width="600px"
+          height="700px"
+          border="1px solid black"
+          p={2}
+          spacing={3}
+          borderRadius="8px"
+          overflow="hidden"
+          boxShadow={3}
+        >
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            <Typography>Dark Mode</Typography>
+            <Switch
+              checked={isDarkMode}
+              onChange={handleThemeToggle}
+              color="default"
             />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+          </Stack>
+          <Stack
+            direction="column"
+            spacing={2}
+            flexGrow={1}
+            overflow="auto"
+            sx={{
+              overflowY: "auto",
+              paddingRight: "8px",
+              "&::-webkit-scrollbar": {
+                width: "6px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: "rgba(0,0,0,0.2)",
+                borderRadius: "8px",
+              },
+            }}
+          >
+            {messages.map((msg, index) => (
+              <Box
+                key={index}
+                display="flex"
+                alignItems="center"
+                justifyContent={
+                  msg.role === "assistant" ? "flex-start" : "flex-end"
+                }
+              >
+                {msg.role === "assistant" && (
+                  <Avatar role={msg.role}>
+                    <ChatIcon />
+                  </Avatar>
+                )}
+                <Box>
+                  <MessageBubble role={msg.role}>
+                    {msg.content}
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{ opacity: 0.7, marginTop: "5px" }}
+                    >
+                      {msg.timestamp.toLocaleTimeString()}
+                    </Typography>
+                  </MessageBubble>
+                </Box>
+                {msg.role === "user" && (
+                  <Avatar role={msg.role}>
+                    <PersonIcon />
+                  </Avatar>
+                )}
+              </Box>
+            ))}
+            {isTyping && (
+              <Box display="flex" alignItems="center">
+                <Avatar role="assistant">
+                  <ChatIcon />
+                </Avatar>
+                <MessageBubble role="assistant">
+                  <Typography variant="body2" sx={{ opacity: 0.6 }}>
+                    Typing...
+                  </Typography>
+                </MessageBubble>
+              </Box>
+            )}
+          </Stack>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Type your message..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress} // Add event listener for Enter key
+            />
+            <IconButton
+              color="primary"
+              onClick={sendMessage}
+              disabled={isTyping}
+            >
+              <SendIcon />
+            </IconButton>
+          </Stack>
+        </Stack>
+      </Box>
+    </ThemeProvider>
   );
 }
